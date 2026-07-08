@@ -22,6 +22,7 @@ class DrishXDashboard {
         console.log("Initializing DrishX Operational Link...");
         this.setupMap();
         this.setupEventListeners();
+        this.setupDocs();
 
         // Initial data fetch
         await this.fetchSites();
@@ -209,11 +210,16 @@ class DrishXDashboard {
             this.updateTrends();
         }
 
+        if (view === 'docs') {
+            this.syncDocsActive?.();
+        }
+
         // Update header
         const titles = {
             dashboard: 'Operations',
             trends: 'Tactical Trends',
-            settings: 'Copernicus Link'
+            settings: 'Copernicus Link',
+            docs: 'Docs'
         };
         const titleEl = document.querySelector('.top-header h1');
         if (titleEl && titles[view]) titleEl.textContent = titles[view];
@@ -601,6 +607,91 @@ class DrishXDashboard {
             statusEl.textContent = msg;
             setTimeout(() => { statusEl.textContent = 'System Online'; }, 5000);
         }
+    }
+
+    setupDocs() {
+        const DOC_SECTIONS = [
+            { id: 'doc-introduction', title: 'Introduction',          group: 'Getting Started' },
+            { id: 'doc-quickstart',   title: 'Quick Start',           group: 'Getting Started' },
+            { id: 'doc-connect',      title: 'Connecting Copernicus', group: 'Getting Started' },
+            { id: 'doc-interface',    title: 'The Interface',         group: 'Using DrishX' },
+            { id: 'doc-usecases',     title: 'Use Cases',             group: 'Using DrishX' },
+            { id: 'doc-targets',      title: 'Interesting Targets',   group: 'Using DrishX' },
+            { id: 'doc-howitworks',   title: 'How It Works',          group: 'Reference' },
+            { id: 'doc-api',          title: 'API Reference',         group: 'Reference' },
+            { id: 'doc-technical',    title: 'Technical Notes',       group: 'Reference' },
+            { id: 'doc-references',   title: 'References & License',   group: 'Reference' },
+        ];
+
+        const subnav = document.getElementById('docs-subnav');
+        const scroller = document.getElementById('docs-content');
+        const view = document.getElementById('docs-view');
+        if (!subnav || !scroller || !view) return;
+
+        // Grouped sub-nav (single source: the manifest above)
+        const groups = [];
+        DOC_SECTIONS.forEach(s => {
+            let g = groups.find(x => x.label === s.group);
+            if (!g) { g = { label: s.group, items: [] }; groups.push(g); }
+            g.items.push(s);
+        });
+        subnav.innerHTML = groups.map(g => `
+            <div class="docs-nav-group">
+                <div class="docs-nav-group-label">${g.label}</div>
+                ${g.items.map(s => `<a class="docs-nav-link" data-target="${s.id}" href="#${s.id}">${s.title}</a>`).join('')}
+            </div>
+        `).join('');
+
+        // Smooth-scroll for any in-docs anchor (sub-nav, cards, CTA)
+        view.addEventListener('click', (e) => {
+            const link = e.target.closest('a[href^="#doc-"]');
+            if (!link) return;
+            e.preventDefault();
+            const target = document.getElementById(link.getAttribute('href').slice(1));
+            if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
+
+        // Scroll-spy: highlight the section nearest the top of the scroller
+        const setActive = (id) => {
+            document.querySelectorAll('.docs-nav-link').forEach(el => {
+                el.classList.toggle('active', el.dataset.target === id);
+            });
+        };
+        const sections = DOC_SECTIONS.map(s => document.getElementById(s.id)).filter(Boolean);
+        const syncActive = () => {
+            // Skip while hidden — a display:none view reports all rects as
+            // zero, which would otherwise fall through to the last section.
+            if (view.classList.contains('hidden')) return;
+            // At the bottom, the last section can't reach the top of the scroller —
+            // force it active so short trailing sections still highlight.
+            if (scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight - 4) {
+                setActive(sections[sections.length - 1].id);
+                return;
+            }
+            const line = scroller.getBoundingClientRect().top + 120;
+            let current = sections[0].id;
+            for (const el of sections) {
+                if (el.getBoundingClientRect().top <= line) current = el.id;
+                else break;
+            }
+            setActive(current);
+        };
+        scroller.addEventListener('scroll', syncActive, { passive: true });
+        this.syncDocsActive = syncActive;
+        syncActive();
+
+        // Tabs (e.g. Technical Notes → Regional accuracy)
+        document.querySelectorAll('.docs-tabs').forEach(tabs => {
+            const btns = tabs.querySelectorAll('.docs-tab');
+            const panels = tabs.querySelectorAll('.docs-tab-panel');
+            btns.forEach(btn => btn.addEventListener('click', () => {
+                btns.forEach(b => b.classList.remove('active'));
+                panels.forEach(p => p.classList.remove('active'));
+                btn.classList.add('active');
+                const panel = tabs.querySelector(`.docs-tab-panel[data-panel="${btn.dataset.tab}"]`);
+                if (panel) panel.classList.add('active');
+            }));
+        });
     }
 
     checkStoredCredentials() {
