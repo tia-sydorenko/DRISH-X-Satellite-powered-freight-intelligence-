@@ -741,6 +741,13 @@ class DrishXDashboard {
     openConnectModal(state = 'a') {
         const modal = document.getElementById('connect-modal');
         if (!modal) return;
+        // Reset any banner left over from a previous session (e.g. a stale
+        // success message after the user has since disconnected).
+        const banner = document.getElementById('connect-status');
+        if (banner) {
+            banner.className = 'connect-banner hidden';
+            banner.innerHTML = '';
+        }
         this.setConnectState(state);
         modal.classList.remove('hidden');
     }
